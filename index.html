@@ -2,44 +2,95 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>My Journal</title>
+  <title>Sunny’s Journal</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; max-width: 700px; }
-    textarea { width: 100%; height: 120px; margin-bottom: 10px; }
-    button { padding: 10px 15px; }
-    .entry { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
-    .date { font-weight: bold; margin-bottom: 5px; }
-    #library a { display: block; margin: 5px 0; text-decoration: none; color: blue; }
-    #entryForm { display: none; }
-    #loginBox { margin-bottom: 20px; }
+    body {
+      font-family: "Georgia", serif;
+      margin: 0;
+      background-color: #4b0082; /* deep purple */
+      color: white;
+    }
+
+    header {
+      text-align: center;
+      padding: 20px;
+    }
+
+    button {
+      padding: 10px 20px;
+      margin: 10px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .sunny-btn {
+      background-color: gold;
+      color: black;
+    }
+
+    .history-btn {
+      background-color: white;
+      color: purple;
+    }
+
+    #journalArea {
+      max-width: 700px;
+      margin: 20px auto;
+      padding: 20px;
+      background: #fff8dc; /* yellowish paper */
+      color: black;
+      border-radius: 10px;
+      box-shadow: 0px 4px 10px rgba(0,0,0,0.4);
+    }
+
+    textarea {
+      width: 100%;
+      height: 120px;
+      margin-bottom: 10px;
+    }
+
+    .entry {
+      margin: 20px 0;
+      padding: 15px;
+      border-bottom: 1px dashed #999;
+    }
+
+    .date {
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #444;
+    }
   </style>
 </head>
 <body>
-  <h1>📖 My Daily Journal</h1>
+  <header>
+    <h1>📖 Sunny’s Journal</h1>
+    <button class="sunny-btn" onclick="showEntryForm()">For Sunny</button>
+    <button class="history-btn" onclick="scrollToHistory()">View Journal History</button>
+  </header>
 
-  <!-- Login -->
-  <div id="loginBox">
-    <input type="password" id="passwordInput" placeholder="Enter password">
-    <button onclick="checkPassword()">Login</button>
+  <div id="journalArea">
+    <!-- Entry Form (hidden until password confirmed) -->
+    <div id="entryForm" style="display:none;">
+      <input type="password" id="passwordInput" placeholder="Enter password"><br>
+      <textarea id="entryText" placeholder="Write today’s journal..."></textarea><br>
+      <button onclick="saveEntry()">Save Entry</button>
+    </div>
+
+    <h2>Today’s Entry</h2>
+    <div id="latestEntry"></div>
+
+    <h2 id="historySection">📚 Journal History</h2>
+    <div id="library"></div>
+    <button id="loadMoreBtn" style="display:none;" onclick="loadMoreEntries()">Load More</button>
   </div>
 
-  <!-- Form to add a new entry (only visible if logged in) -->
-  <form id="entryForm">
-    <textarea id="entryText" placeholder="Write today’s journal..."></textarea><br>
-    <button type="submit">Save Entry</button>
-  </form>
-
-  <h2>Today’s Entry</h2>
-  <div id="latestEntry"></div>
-
-  <h2>📚 Journal Library</h2>
-  <div id="library"></div>
-
-  <!-- Firebase SDK -->
+  <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js"></script>
   <script>
-    // ✅ Your Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyDe62-Q_WF8oMomsKfonNd3u5jTUhrkaFc",
       authDomain: "journal-1f6a9.firebaseapp.com",
@@ -49,66 +100,99 @@
       appId: "1:1034090685916:web:0ba4a554f003c30fd05b19"
     };
 
-    // ✅ Initialize Firebase
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    const form = document.getElementById('entryForm');
-    const entryText = document.getElementById('entryText');
-    const latestEntryDiv = document.getElementById('latestEntry');
-    const libraryDiv = document.getElementById('library');
+    let lastVisible = null; // for pagination
 
-    // Password check
-    function checkPassword() {
-      const input = document.getElementById("passwordInput").value;
-      if (input === "Helloandgoodbye36!") {
+    // Show entry form
+    function showEntryForm() {
+      const pw = prompt("Enter password:");
+      if (pw === "Helloandgoodbye36!") {
         document.getElementById("entryForm").style.display = "block";
-        document.getElementById("loginBox").style.display = "none";
       } else {
         alert("❌ Wrong password!");
       }
     }
 
-    // Save entry (1 per day)
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const text = entryText.value.trim();
+    // Scroll to history section
+    function scrollToHistory() {
+      document.getElementById("historySection").scrollIntoView({ behavior: "smooth" });
+    }
+
+    // Save entry with time
+    async function saveEntry() {
+      const text = document.getElementById("entryText").value.trim();
       if (!text) return;
 
-      const today = new Date().toISOString().split("T")[0];
-      await db.collection("entries").doc(today).set({
+      const now = new Date();
+      const timestamp = now.toISOString();
+
+      await db.collection("entries").doc(timestamp).set({
         text: text,
-        date: today
+        timestamp: timestamp
       });
 
-      entryText.value = "";
-    });
+      document.getElementById("entryText").value = "";
+      alert("✅ Entry saved!");
+    }
+
+    // Format date to local timezone
+    function formatDate(ts) {
+      const d = new Date(ts);
+      return d.toLocaleString(undefined, { dateStyle: "full", timeStyle: "short" });
+    }
 
     // Show latest entry
-    db.collection("entries").orderBy("date", "desc").limit(1).onSnapshot(snapshot => {
-      latestEntryDiv.innerHTML = "";
+    db.collection("entries").orderBy("timestamp", "desc").limit(1).onSnapshot(snapshot => {
+      const latestDiv = document.getElementById("latestEntry");
+      latestDiv.innerHTML = "";
       snapshot.forEach(doc => {
         const data = doc.data();
-        latestEntryDiv.innerHTML = `
+        latestDiv.innerHTML = `
           <div class="entry">
-            <div class="date">${data.date}</div>
+            <div class="date">${formatDate(data.timestamp)}</div>
             <div>${data.text}</div>
           </div>
         `;
       });
     });
 
-    // Build library of past entries
-    db.collection("entries").orderBy("date", "desc").onSnapshot(snapshot => {
-      libraryDiv.innerHTML = "";
+    // Load history entries in chunks
+    async function loadEntries(initial=false) {
+      let query = db.collection("entries").orderBy("timestamp", "desc").limit(5);
+
+      if (lastVisible && !initial) {
+        query = query.startAfter(lastVisible);
+      }
+
+      const snapshot = await query.get();
+      if (snapshot.empty) return;
+
+      const lib = document.getElementById("library");
+
       snapshot.forEach(doc => {
         const data = doc.data();
-        const link = document.createElement("a");
-        link.href = `journal.html?date=${data.date}`;
-        link.textContent = data.date;
-        libraryDiv.appendChild(link);
+        const entryDiv = document.createElement("div");
+        entryDiv.className = "entry";
+        entryDiv.innerHTML = `
+          <div class="date">${formatDate(data.timestamp)} (published)</div>
+          <div>${data.text}</div>
+        `;
+        lib.appendChild(entryDiv);
       });
-    });
+
+      lastVisible = snapshot.docs[snapshot.docs.length-1];
+      document.getElementById("loadMoreBtn").style.display = snapshot.size === 5 ? "block" : "none";
+    }
+
+    // Manual load more
+    function loadMoreEntries() {
+      loadEntries();
+    }
+
+    // Initial load
+    loadEntries(true);
   </script>
 </body>
 </html>
