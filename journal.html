@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Journal Entry</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: purple;
+      color: black;
+    }
+    #journalPaper {
+      background: #fff8dc; /* yellowish paper */
+      padding: 20px;
+      margin: 20px auto;
+      max-width: 700px;
+      border: 1px solid #ccc;
+    }
+    .entry {
+      padding: 10px;
+      border-bottom: 1px solid #ccc;
+    }
+    .date {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div id="journalPaper">
+    <h1>Journal Entry</h1>
+    <div id="entryContent"></div>
+    <a href="index.html">⬅ Back to Journal</a>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+  <script>
+    // ✅ Firebase config
+    const firebaseConfig = {
+    apiKey: "AIzaSyDe62-Q_WF8oMomsKfonNd3u5jTUhrkaFc",
+    authDomain: "journal-1f6a9.firebaseapp.com",
+    databaseURL: "https://journal-1f6a9-default-rtdb.firebaseio.com",  // 👈 add this
+    projectId: "journal-1f6a9",
+    storageBucket: "journal-1f6a9.appspot.com",
+    messagingSenderId: "1034090685916",
+    appId: "1:1034090685916:web:0ba4a554f003c30fd05b19"
+  };
+
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const entryContent = document.getElementById('entryContent');
+
+    // Get date from URL
+    const params = new URLSearchParams(window.location.search);
+    const date = params.get("date");
+
+    if (date) {
+      db.ref("entries/" + date).once("value").then(snapshot => {
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          const dateStr = new Date(data.timestamp).toLocaleString();
+          entryContent.innerHTML = `
+            <div class="entry">
+              <div class="date">${dateStr}</div>
+              <div>${data.text}</div>
+            </div>
+          `;
+        } else {
+          entryContent.innerHTML = "<p>No entry found for this date.</p>";
+        }
+      });
+    } else {
+      entryContent.innerHTML = "<p>No date specified.</p>";
+    }
+  </script>
+</body>
+</html>
