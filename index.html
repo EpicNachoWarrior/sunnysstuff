@@ -10,35 +10,46 @@
       color: black;
       margin: 20px;
     }
+
     #controls {
       display: flex;
+      justify-content: flex-start;
       gap: 10px;
       margin-bottom: 20px;
     }
+
+    #historySection, 
+    #loginBox, 
+    #sunnyTools, 
+    #latestEntry {
+      background: #f5f0c9; /* yellowish background restored */
+      padding: 20px;
+      margin-top: 20px;
+      border-radius: 5px;
+    }
+
     #historySection {
-      background: #f5f0c9;
-      padding: 20px;
-      margin-top: 20px;
-      display: none; /* 🔑 hidden by default */
+      display: none; /* hidden until button pressed */
     }
-    #loginBox, #sunnyTools {
-      background: #f5f0c9;
-      padding: 20px;
-      margin-top: 20px;
-      display: none; /* both hidden until needed */
-    }
+
     textarea, input {
       width: 100%;
       margin: 5px 0;
     }
+
     button {
       margin: 5px;
       padding: 5px 10px;
     }
+
     .entry {
-      border-bottom: 1px solid black;
-      padding: 10px 0;
+      background: #fffbe6; /* slightly lighter inside entries */
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      padding: 10px;
+      margin-bottom: 10px;
     }
+
     .entry img {
       max-width: 300px;
       display: block;
@@ -47,43 +58,45 @@
   </style>
 </head>
 <body>
-  <h1>Sunny's Journal</h1>
-
-  <!-- Control Buttons -->
+  <!-- Controls -->
   <div id="controls">
-    <button onclick="toggleHistory()">📖 Journal History</button>
-    <button onclick="toggleLogin()">🔒 Login</button>
-  </div>
-
-  <!-- Latest Entry (always visible) -->
-  <h2>Latest Entry</h2>
-  <div id="latestEntry"></div>
-
-  <!-- Journal History (hidden by default) -->
-  <div id="historySection">
-    <h2>Journal History</h2>
-    <div id="entries"></div>
-    <button id="loadMoreBtn" onclick="loadMore()">Load More</button>
+    <button onclick="toggleHistory()"> Journal History</button>
+    <button onclick="toggleLogin()"> Login</button>
   </div>
 
   <!-- Login Box -->
-  <div id="loginBox">
-    <h3>🔒 Sunny’s Login</h3>
-    <input type="email" id="emailInput" placeholder="Email"><br><br>
-    <input type="password" id="passwordInput" placeholder="Password"><br><br>
+  <div id="loginBox" style="display:none;">
+    <h3> Sunny’s Login</h3>
+    <input type="email" id="emailInput" placeholder="Email"><br>
+    <input type="password" id="passwordInput" placeholder="Password"><br>
     <button onclick="login()">Login</button>
-    <button onclick="toggleLogin()">Cancel</button>
     <p id="loginStatus"></p>
   </div>
 
-  <!-- Journal Tools (Sunny only) -->
-  <div id="sunnyTools">
+  <!-- Sunny Tools (only visible when logged in) -->
+  <div id="sunnyTools" style="display:none;">
+    <h2>Sunny's Journal</h2>
     <button onclick="logout()">Logout</button>
-    <div id="entryForm" style="margin-top:15px;">
+    <br><br>
+
+    <!-- Entry Form -->
+    <div id="entryForm">
       <textarea id="entryText" placeholder="Write your journal entry..."></textarea>
       <input type="file" id="imageInput" accept="image/*">
       <button onclick="saveEntry()">Save Entry</button>
     </div>
+  </div>
+
+  <!-- Latest Entry -->
+  <div id="latestEntry">
+    <h2>Latest Entry</h2>
+  </div>
+
+  <!-- History Section -->
+  <div id="historySection">
+    <h2>Journal History</h2>
+    <div id="entries"></div>
+    <button id="loadMoreBtn" onclick="loadMore()">Load More</button>
   </div>
 
   <!-- Firebase -->
@@ -105,30 +118,30 @@
     const db = firebase.database();
     const auth = firebase.auth();
 
-    const SUNNY_EMAIL = "sunny@example.com"; // Replace with Sunny’s actual email
+    // Sunny’s email (only she can delete entries)
+    const SUNNY_EMAIL = "sunny@example.com";
+
+    // Toggle Login box
+    function toggleLogin() {
+      const loginBox = document.getElementById("loginBox");
+      loginBox.style.display = loginBox.style.display === "none" ? "block" : "none";
+    }
+
+    // Toggle History
+    function toggleHistory() {
+      const history = document.getElementById("historySection");
+      history.style.display = history.style.display === "none" ? "block" : "none";
+    }
 
     // Auth state listener
     auth.onAuthStateChanged(user => {
-      if (user && user.email === SUNNY_EMAIL) {
+      if (user) {
         document.getElementById("loginBox").style.display = "none";
         document.getElementById("sunnyTools").style.display = "block";
       } else {
         document.getElementById("sunnyTools").style.display = "none";
       }
     });
-
-    // Toggle login box
-    function toggleLogin() {
-      const box = document.getElementById("loginBox");
-      box.style.display = (box.style.display === "none" || box.style.display === "") ? "block" : "none";
-      document.getElementById("loginStatus").textContent = "";
-    }
-
-    // Toggle journal history
-    function toggleHistory() {
-      const history = document.getElementById("historySection");
-      history.style.display = (history.style.display === "none") ? "block" : "none";
-    }
 
     // Login
     function login() {
@@ -138,7 +151,7 @@
         .then(() => {
           document.getElementById("loginStatus").textContent = "✅ Logged in!";
         })
-        .catch(err => {
+        .catch(() => {
           document.getElementById("loginStatus").textContent = "❌ Wrong login!";
         });
     }
@@ -148,7 +161,7 @@
       auth.signOut();
     }
 
-    // Save new entry
+    // Save entry
     async function saveEntry() {
       const text = document.getElementById('entryText').value.trim();
       const file = document.getElementById('imageInput').files[0];
@@ -163,8 +176,7 @@
         text: text,
         image: imageBase64,
         timestamp: new Date().toISOString(),
-        uid: auth.currentUser.uid,
-        email: auth.currentUser.email
+        uid: auth.currentUser.uid
       });
 
       document.getElementById('entryText').value = "";
@@ -180,11 +192,11 @@
       });
     }
 
-    // Latest entry
+    // Show latest entry (always at the top)
     db.ref("entries").orderByKey().limitToLast(1).on("child_added", snapshot => {
       const data = snapshot.val();
       const latestContainer = document.getElementById("latestEntry");
-      latestContainer.innerHTML = ""; // clear
+      latestContainer.innerHTML = "<h2>Latest Entry</h2>"; // reset
       displayEntry(snapshot.key, data, latestContainer);
     });
 
@@ -207,17 +219,13 @@
         ${deleteBtn}
       `;
 
-      if (container.firstChild) {
-        container.insertBefore(div, container.firstChild);
-      } else {
-        container.appendChild(div);
-      }
+      container.prepend(div);
     }
 
     // Delete entry
     function deleteEntry(key) {
-      if (auth.currentUser && auth.currentUser.email === SUNNY_EMAIL) {
-        db.ref("entries/" + key).remove();
+      if (confirm("Delete this entry?")) {
+        db.ref("entries").child(key).remove();
       }
     }
 
@@ -241,4 +249,6 @@
   </script>
 </body>
 </html>
+
+
 
