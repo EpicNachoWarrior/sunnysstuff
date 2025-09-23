@@ -12,7 +12,6 @@
     }
     #controls {
       display: flex;
-      justify-content: flex-start;
       gap: 10px;
       margin-bottom: 20px;
     }
@@ -20,7 +19,13 @@
       background: #f5f0c9;
       padding: 20px;
       margin-top: 20px;
-      display: none; /* 🔑 hidden until button is pressed */
+      display: none; /* 🔑 hidden by default */
+    }
+    #loginBox, #sunnyTools {
+      background: #f5f0c9;
+      padding: 20px;
+      margin-top: 20px;
+      display: none; /* both hidden until needed */
     }
     textarea, input {
       width: 100%;
@@ -47,14 +52,14 @@
   <!-- Control Buttons -->
   <div id="controls">
     <button onclick="toggleHistory()">📖 Journal History</button>
-    <button onclick="showLogin()">🔒 Login</button>
+    <button onclick="toggleLogin()">🔒 Login</button>
   </div>
 
   <!-- Latest Entry (always visible) -->
   <h2>Latest Entry</h2>
   <div id="latestEntry"></div>
 
-  <!-- Journal History (hidden until button pressed) -->
+  <!-- Journal History (hidden by default) -->
   <div id="historySection">
     <h2>Journal History</h2>
     <div id="entries"></div>
@@ -62,17 +67,17 @@
   </div>
 
   <!-- Login Box -->
-  <div id="loginBox" style="display:none; margin-top:20px; background:#f5f0c9; padding:20px;">
+  <div id="loginBox">
     <h3>🔒 Sunny’s Login</h3>
     <input type="email" id="emailInput" placeholder="Email"><br><br>
     <input type="password" id="passwordInput" placeholder="Password"><br><br>
     <button onclick="login()">Login</button>
-    <button onclick="hideLogin()">Cancel</button>
+    <button onclick="toggleLogin()">Cancel</button>
     <p id="loginStatus"></p>
   </div>
 
-  <!-- Journal Tools (hidden until Sunny logs in) -->
-  <div id="sunnyTools" style="display:none; margin-top:20px; background:#f5f0c9; padding:20px;">
+  <!-- Journal Tools (Sunny only) -->
+  <div id="sunnyTools">
     <button onclick="logout()">Logout</button>
     <div id="entryForm" style="margin-top:15px;">
       <textarea id="entryText" placeholder="Write your journal entry..."></textarea>
@@ -100,8 +105,7 @@
     const db = firebase.database();
     const auth = firebase.auth();
 
-    // ✅ Replace with Sunny’s actual Firebase login email
-    const SUNNY_EMAIL = "sunny@example.com";
+    const SUNNY_EMAIL = "sunny@example.com"; // Replace with Sunny’s actual email
 
     // Auth state listener
     auth.onAuthStateChanged(user => {
@@ -113,14 +117,10 @@
       }
     });
 
-    // Show/hide login
-    function showLogin() {
-      document.getElementById("loginBox").style.display = "block";
-    }
-    function hideLogin() {
-      document.getElementById("loginBox").style.display = "none";
-      document.getElementById("emailInput").value = "";
-      document.getElementById("passwordInput").value = "";
+    // Toggle login box
+    function toggleLogin() {
+      const box = document.getElementById("loginBox");
+      box.style.display = (box.style.display === "none" || box.style.display === "") ? "block" : "none";
       document.getElementById("loginStatus").textContent = "";
     }
 
@@ -130,7 +130,7 @@
       history.style.display = (history.style.display === "none") ? "block" : "none";
     }
 
-    // Login (no signup anymore)
+    // Login
     function login() {
       const email = document.getElementById("emailInput").value;
       const password = document.getElementById("passwordInput").value;
@@ -180,15 +180,15 @@
       });
     }
 
-    // Show latest entry (always pinned at top)
+    // Latest entry
     db.ref("entries").orderByKey().limitToLast(1).on("child_added", snapshot => {
       const data = snapshot.val();
       const latestContainer = document.getElementById("latestEntry");
-      latestContainer.innerHTML = ""; // 🔑 Clear old content
+      latestContainer.innerHTML = ""; // clear
       displayEntry(snapshot.key, data, latestContainer);
     });
 
-    // Display entry with conditional delete
+    // Display entry
     function displayEntry(key, data, container) {
       const div = document.createElement("div");
       div.className = "entry";
@@ -207,7 +207,6 @@
         ${deleteBtn}
       `;
 
-      // Always put newest first in container
       if (container.firstChild) {
         container.insertBefore(div, container.firstChild);
       } else {
@@ -215,16 +214,14 @@
       }
     }
 
-    // Delete entry (Sunny only)
+    // Delete entry
     function deleteEntry(key) {
       if (auth.currentUser && auth.currentUser.email === SUNNY_EMAIL) {
         db.ref("entries/" + key).remove();
-      } else {
-        alert("Only Sunny can delete entries!");
       }
     }
 
-    // History (lazy load, newest → oldest)
+    // History (lazy load)
     let lastKey = null;
     function loadMore() {
       let query = db.ref("entries").orderByKey().limitToLast(5);
