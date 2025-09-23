@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sunny's Journal</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #3b0a45; /* dark purple */
+      color: black;
+      margin: 20px;
+    }
+    #controls {
+      display: flex;
+      justify-content: flex-start;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    #historySection {
+      background: #f5f0c9;
+      padding: 20px;
+      margin-top: 20px;
+      display: none; /* 🔑 hidden until button is pressed */
+    }
+    textarea, input {
+      width: 100%;
+      margin: 5px 0;
+    }
+    button {
+      margin: 5px;
+      padding: 5px 10px;
+    }
+    .entry {
+      border-bottom: 1px solid black;
+      padding: 10px 0;
+    }
+    .entry img {
+      max-width: 300px;
+      display: block;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sunny's Journal</h1>
+
+  <!-- Control Buttons -->
+  <div id="controls">
+    <button onclick="toggleHistory()">📖 Journal History</button>
+    <button onclick="showLogin()">🔒 Login</button>
+  </div>
+
+  <!-- Latest Entry (always visible) -->
+  <h2>Latest Entry</h2>
+  <div id="latestEntry"></div>
+
+  <!-- Journal History (hidden until button pressed) -->
+  <div id="historySection">
+    <h2>Journal History</h2>
+    <div id="entries"></div>
+    <button id="loadMoreBtn" onclick="loadMore()">Load More</button>
+  </div>
+
+  <!-- Login Box -->
+  <div id="loginBox" style="display:none; margin-top:20px; background:#f5f0c9; padding:20px;">
+    <h3>🔒 Sunny’s Login</h3>
+    <input type="email" id="emailInput" placeholder="Email"><br><br>
+    <input type="password" id="passwordInput" placeholder="Password"><br><br>
+    <button onclick="login()">Login</button>
+    <button onclick="hideLogin()">Cancel</button>
+    <p id="loginStatus"></p>
+  </div>
+
+  <!-- Journal Tools (hidden until Sunny logs in) -->
+  <div id="sunnyTools" style="display:none; margin-top:20px; background:#f5f0c9; padding:20px;">
+    <button onclick="logout()">Logout</button>
+    <div id="entryForm" style="margin-top:15px;">
+      <textarea id="entryText" placeholder="Write your journal entry..."></textarea>
+      <input type="file" id="imageInput" accept="image/*">
+      <button onclick="saveEntry()">Save Entry</button>
+    </div>
+  </div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+  <script>
+    // Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyDe62-Q_WF8oMomsKfonNd3u5jTUhrkaFc",
+      authDomain: "journal-1f6a9.firebaseapp.com",
+      databaseURL: "https://journal-1f6a9-default-rtdb.firebaseio.com/",
+      projectId: "journal-1f6a9",
+      storageBucket: "journal-1f6a9.appspot.com",
+      messagingSenderId: "1034090685916",
+      appId: "1:1034090685916:web:0ba4a554f003c30fd05b19"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const auth = firebase.auth();
+
+    // ✅ Replace with Sunny’s actual Firebase login email
+    const SUNNY_EMAIL = "sunny@example.com";
+
+    // Auth state listener
+    auth.onAuthStateChanged(user => {
+      if (user && user.email === SUNNY_EMAIL) {
+        document.getElementById("loginBox").style.display = "none";
+        document.getElementById("sunnyTools").style.display = "block";
+      } else {
+        document.getElementById("sunnyTools").style.display = "none";
+      }
+    });
+
+    // Show/hide login
+    function showLogin() {
+      document.getElementById("loginBox").style.display = "block";
+    }
+    function hideLogin() {
+      document.getElementById("loginBox").style.display = "none";
+      document.getElementById("emailInput").value = "";
+      document.getElementById("passwordInput").value = "";
+      document.getElementById("loginStatus").textContent = "";
+    }
+
+    // Toggle journal history
+    function toggleHistory() {
+      const history = document.getElementById("historySection");
+      history.style.display = (history.style.display === "none") ? "block" : "none";
+    }
+
+    // Login (no signup anymore)
+    function login() {
+      const email = document.getElementById("emailInput").value;
+      const password = document.getElementById("passwordInput").value;
+      auth.signInWithEmailAndPassword(email, password)
+        .then(() => {
+          document.getElementById("loginStatus").textContent = "✅ Logged in!";
+        })
+        .catch(err => {
+          document.getElementById("loginStatus").textContent = "❌ Wrong login!";
+        });
+    }
+
+    // Logout
+    function logout() {
+      auth.signOut();
+    }
+
+    // Save new entry
+    async function saveEntry() {
+      const text = document.getElementById('entryText').value.trim();
+      const file = document.getElementById('imageInput').files[0];
+      if (!text && !file) return;
+
+      let imageBase64 = "";
+      if (file) {
+        imageBase64 = await fileToBase64(file);
+      }
+
+      db.ref("entries").push({
+        text: text,
+        image: imageBase64,
+        timestamp: new Date().toISOString(),
+        uid: auth.currentUser.uid,
+        email: auth.currentUser.email
+      });
+
+      document.getElementById('entryText').value = "";
+      document.getElementById('imageInput').value = "";
+    }
+
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+      });
+    }
+
+    // Show latest entry (always pinned at top)
+    db.ref("entries").orderByKey().limitToLast(1).on("child_added", snapshot => {
+      const data = snapshot.val();
+      const latestContainer = document.getElementById("latestEntry");
+      latestContainer.innerHTML = ""; // 🔑 Clear old content
+      displayEntry(snapshot.key, data, latestContainer);
+    });
+
+    // Display entry with conditional delete
+    function displayEntry(key, data, container) {
+      const div = document.createElement("div");
+      div.className = "entry";
+      const date = new Date(data.timestamp);
+
+      let deleteBtn = "";
+      const user = auth.currentUser;
+      if (user && user.email === SUNNY_EMAIL) {
+        deleteBtn = `<button onclick="deleteEntry('${key}')">❌ Delete</button>`;
+      }
+
+      div.innerHTML = `
+        <strong>${date.toLocaleString("en-US", { timeZone: "America/Los_Angeles" })}</strong>
+        <p>${data.text}</p>
+        ${data.image ? `<img src="${data.image}">` : ""}
+        ${deleteBtn}
+      `;
+
+      // Always put newest first in container
+      if (container.firstChild) {
+        container.insertBefore(div, container.firstChild);
+      } else {
+        container.appendChild(div);
+      }
+    }
+
+    // Delete entry (Sunny only)
+    function deleteEntry(key) {
+      if (auth.currentUser && auth.currentUser.email === SUNNY_EMAIL) {
+        db.ref("entries/" + key).remove();
+      } else {
+        alert("Only Sunny can delete entries!");
+      }
+    }
+
+    // History (lazy load, newest → oldest)
+    let lastKey = null;
+    function loadMore() {
+      let query = db.ref("entries").orderByKey().limitToLast(5);
+      if (lastKey) query = query.endAt(lastKey);
+
+      query.once("value", snapshot => {
+        const entries = snapshot.val();
+        if (!entries) return;
+        const keys = Object.keys(entries);
+        lastKey = keys[0];
+
+        keys.reverse().forEach(k => {
+          displayEntry(k, entries[k], document.getElementById("entries"));
+        });
+      });
+    }
+  </script>
+</body>
+</html>
