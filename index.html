@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Sunny's Journal</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    /* Simple styling: Arial, purple background, yellow "paper" center */
+    body { margin:0; font-family: Arial, sans-serif; background: #5e2a8a; color: #fff; }
+    header { text-align:center; padding:18px 10px; }
+    h1 { margin:0 0 10px 0; font-size:22px; color:#fff; }
+    .btn { padding:8px 14px; margin:6px; border:none; cursor:pointer; font-weight:bold; }
+    .btn-sunny { background:#ffd700; color:#000; }
+    .btn-history { background:#fff; color:#5e2a8a; }
+
+    #paper {
+      max-width:760px; margin:18px auto; padding:18px; background:#fff8dc; color:#000;
+      border: none; /* no rounded corners, no shadow */
+    }
+
+    input[type="password"] { width:100%; padding:8px; margin-bottom:8px; box-sizing:border-box; }
+    textarea { width:100%; padding:8px; box-sizing:border-box; min-height:110px; }
+    .entry { padding:12px 0; border-bottom:1px solid #999; }
+    .meta { color:#333; font-size:13px; margin-bottom:6px; }
+    #loadMoreBtn { margin:12px 0; padding:8px 12px; display:block; width:100%; }
+    a { color:inherit; text-decoration:underline; }
+    .status { font-size:13px; color:#222; margin-bottom:10px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Sunny's Journal</h1>
+    <button class="btn btn-sunny" id="forSunnyBtn">For Sunny</button>
+    <button class="btn btn-history" id="viewHistoryBtn">View Journal History</button>
+  </header>
+
+  <main id="paper">
+    <div id="statusArea" class="status">Loading...</div>
+
+    <!-- Hidden entry form (shown after password) -->
+    <div id="entryFormWrap" style="display:none;">
+      <input id="pwInput" type="password" placeholder="Enter password" />
+      <textarea id="entryText" placeholder="Write your entry..."></textarea>
+      <button id="saveBtn">Save Entry</button>
+    </div>
+
+    <h2 style="margin-top:14px;">Today's Entry</h2>
+    <div id="latestEntry"></div>
+
+    <h2 id="historyHeading" style="margin-top:14px;">Journal History</h2>
+    <div id="library"></div>
+
+    <!-- sentinel for infinite scroll -->
+    <div id="loadSentinel" style="height:1px;"></div>
+    <button id="loadMoreBtn" style="display:none;">Load more</button>
+  </main>
+
+  <!-- Firebase v8 compatibility CDN (namespaced API) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
+
+  <script>
+    // ---------- CONFIG ----------
+    const firebaseConfig = {
+      apiKey: "AIzaSyDe62-Q_WF8oMomsKfonNd3u5jTUhrkaFc",
+      authDomain: "journal-1f6a9.firebaseapp.com",
+      projectId: "journal-1f6a9",
+      storageBucket: "journal-1f6a9.appspot.com",
+      messagingSenderId: "1034090685916",
+      appId: "1:1034090685916:web:0ba4a554f003c30fd05b19"
+    };
+
+    // ---------- BASIC DIAGNOSTIC / LOAD CHECK ----------
+    // If firebase isn't defined after loading the CDN, we log a clear error.
+    if (typeof firebase === 'undefined') {
+      document.getElementById('statusArea').textContent =
+        'ERROR: Firebase library failed to load. Check console and network.';
+      console.error('Firebase is undefined. CDN scripts did not load or were blocked.');
+      // stop further execution (avoid runtime exceptions)
+    } else {
+      console.log('Firebase script loaded OK.');
+      try {
+        firebase.initializeApp(firebaseConfig);
+        console.log('firebase.initializeApp called.');
+      } catch (e) {
+        console.warn('firebase.initializeApp probably already called or failed:', e);
+      }
+
+      const db = firebase.firestore();
+      window._journal_db = db; // small debugging handle in console if needed
+      console.log('Firestore initialized:', !!db);
+
+      // Wait for DOM content loaded before binding UI / queries
+      document.addEventListener('DOMContentLoaded', () => {
+        // UI references
+        const statusArea = document.getElementById('statusArea');
+        const forSunnyBtn = document.getElementById('forSunnyBtn');
+        const viewHistoryBtn = document.getElementById('viewHistoryBtn');
+        const entryFormWrap = document.getElementById('entryFormWrap');
+        const pwInput = document.getElementById('pwInput');
+        const entryText = document.getElementById('entryText');
+        const saveBtn = document.getElementById('saveBtn');
+        const latestEntry = document.getElementById('latestEntry');
+        const library = document.getElementById('library');
+        const loadMoreBtn = document.getElementById('loadMoreBtn');
+        const loadSentinel = document.getElementById('loadSentinel');
+        const historyHeading = document.getElementById('historyHeading');
+
+        statusArea.textContent = 'Ready.';
+
+        // Password logic (client-side only)
+        const SECRET = 'Helloandgoodbye36!';
+
+        function openFormPrompt() {
+          const pw = prompt('Enter password for Sunny:');
+          if (pw === SECRET) {
+            entryFormWrap.style.display = 'block';
+            // put focus in textarea
+            setTimeout(() => entryText.focus(), 50);
+          } else {
+            alert('Wrong password.');
+          }
+        }
+        forSunnyBtn.addEventListener('click', openFormPrompt);
+        viewHistoryBtn.addEventListener('click', () => {
+          historyHeading.scrollIntoView({behavior:'smooth'});
+        });
+
+        // Save entry function (guard with db)
+        async function saveEntry() {
+          if (!db) {
+            console.error('saveEntry: db not available');
+            alert('Database not available. Check console.');
+            return;
+          }
+          const text = entryText.value.trim();
+          if (!text) return alert('Write something before saving.');
+
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Saving...';
+          try {
+            // document id: milliseconds since epoch (string) -> predictable & sortable
+            const docId = Date.now().toString();
+            const ts = firebase.firestore.Timestamp.now();
+            await db.collection('entries').doc(docId).set({
+              text: text,
+              timestamp: ts
+            });
+            entryText.value = '';
+            alert('Saved.');
+            // refresh latest automatically (onSnapshot will pick up)
+          } catch (err) {
+            console.error('Error saving entry:', err);
+            alert('Save failed. Check console for details.');
+          } finally {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save Entry';
+          }
+        }
+        saveBtn.addEventListener('click', saveEntry);
+
+        // Format timestamp object to viewer's local timezone string
+        function formatTimestampField(tsField) {
+          // Firestore Timestamp -> JS Date
+          let dateObj;
+          if (!tsField) return '(no date)';
+          if (typeof tsField.toDate === 'function') {
+            dateObj = tsField.toDate();
+          } else {
+            dateObj = new Date(tsField);
+          }
+          // Use viewer locale/timezone
+          try {
+            return dateObj.toLocaleString(undefined, { dateStyle:'medium', timeStyle:'short' });
+          } catch (e) {
+            return dateObj.toString();
+          }
+        }
+
+        // Show latest entry (realtime)
+        db.collection('entries').orderBy('timestamp','desc').limit(1)
+          .onSnapshot(snapshot => {
+            latestEntry.innerHTML = '';
+            snapshot.forEach(doc => {
+              const d = doc.data();
+              const p = document.createElement('div');
+              p.className = 'entry';
+              p.innerHTML = '<div class="meta">' + formatTimestampField(d.timestamp) + '</div>'
+                          + '<div>' + escapeHtml(d.text) + '</div>';
+              latestEntry.appendChild(p);
+            });
+          }, e => {
+            console.error('latest onSnapshot error:', e);
+            statusArea.textContent = 'Realtime error. Check console.';
+          });
+
+        // Pagination / lazy loading
+        let pageSize = 5;
+        let lastDoc = null;
+        let loading = false;
+        let reachedEnd = false;
+
+        async function loadNextPage() {
+          if (loading || reachedEnd) return;
+          loading = true;
+          statusArea.textContent = 'Loading entries...';
+
+          let q = db.collection('entries').orderBy('timestamp','desc').limit(pageSize);
+          if (lastDoc) q = q.startAfter(lastDoc);
+
+          try {
+            const snap = await q.get();
+            if (snap.empty) {
+              reachedEnd = true;
+              statusArea.textContent = 'No more entries.';
+              loadMoreBtn.style.display = 'none';
+            } else {
+              snap.forEach(doc => {
+                const d = doc.data();
+                const wrap = document.createElement('div');
+                wrap.className = 'entry';
+                // link to single page by doc id
+                const link = 'journal.html?id=' + encodeURIComponent(doc.id);
+                const meta = '<div class="meta">' + formatTimestampField(d.timestamp) + ' (published)</div>';
+                wrap.innerHTML = meta + '<div>' + escapeHtml(d.text) + '</div>'
+                                + '<div style="margin-top:8px;"><a href="' + link + '">Open entry</a></div>';
+                library.appendChild(wrap);
+              });
+              lastDoc = snap.docs[snap.docs.length - 1];
+              // if returned full pageSize, allow loading more
+              if (snap.size === pageSize) {
+                loadMoreBtn.style.display = 'block';
+                statusArea.textContent = '';
+              } else {
+                // fewer than pageSize -> we've hit the end
+                reachedEnd = true;
+                loadMoreBtn.style.display = 'none';
+                statusArea.textContent = 'End of journal.';
+              }
+            }
+          } catch (err) {
+            console.error('Error loading entries:', err);
+            statusArea.textContent = 'Error loading entries. Check console.';
+          } finally {
+            loading = false;
+          }
+        }
+
+        loadMoreBtn.addEventListener('click', loadNextPage);
+
+        // IntersectionObserver: automatically load next page when sentinel appears
+        const observer = new IntersectionObserver(entries => {
+          entries.forEach(en => {
+            if (en.isIntersecting) loadNextPage();
+          });
+        }, { root: null, rootMargin: '0px', threshold: 0.1 });
+
+        observer.observe(loadSentinel);
+
+        // initial load
+        loadNextPage();
+
+        // small helper to prevent XSS when injecting saved text into HTML
+        function escapeHtml(str) {
+          if (!str) return '';
+          return str.replace(/[&<>"']/g, s => {
+            const map = { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' };
+            return map[s];
+          }).replace(/\n/g,'<br>');
+        }
+
+        // debug helper in page: show firebase app name in status
+        try {
+          statusArea.textContent = 'Connected to Firebase app: ' + firebase.app().name;
+        } catch(e) { /* ignore */ }
+      }); // DOMContentLoaded end
+    } // else firebase defined end
+  </script>
+</body>
+</html>
