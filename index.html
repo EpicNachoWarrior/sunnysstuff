@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Sunny’s Journal</title>
+  <title>Sunny's Journal</title>
   <style>
     body {
-      font-family: "Georgia", serif;
+      font-family: Arial, sans-serif;
       margin: 0;
-      background-color: #4b0082; /* deep purple */
+      background-color: purple;
       color: white;
     }
 
@@ -20,7 +20,6 @@
       padding: 10px 20px;
       margin: 10px;
       border: none;
-      border-radius: 5px;
       cursor: pointer;
       font-weight: bold;
     }
@@ -41,8 +40,6 @@
       padding: 20px;
       background: #fff8dc; /* yellowish paper */
       color: black;
-      border-radius: 10px;
-      box-shadow: 0px 4px 10px rgba(0,0,0,0.4);
     }
 
     textarea {
@@ -54,19 +51,19 @@
     .entry {
       margin: 20px 0;
       padding: 15px;
-      border-bottom: 1px dashed #999;
+      border-bottom: 1px solid #999;
     }
 
     .date {
       font-weight: bold;
       margin-bottom: 5px;
-      color: #444;
+      color: #333;
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>📖 Sunny’s Journal</h1>
+    <h1>Sunny's Journal</h1>
     <button class="sunny-btn" onclick="showEntryForm()">For Sunny</button>
     <button class="history-btn" onclick="scrollToHistory()">View Journal History</button>
   </header>
@@ -79,17 +76,17 @@
       <button onclick="saveEntry()">Save Entry</button>
     </div>
 
-    <h2>Today’s Entry</h2>
+    <h2>Today's Entry</h2>
     <div id="latestEntry"></div>
 
-    <h2 id="historySection">📚 Journal History</h2>
+    <h2 id="historySection">Journal History</h2>
     <div id="library"></div>
     <button id="loadMoreBtn" style="display:none;" onclick="loadMoreEntries()">Load More</button>
   </div>
 
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js"></script>
+  <!-- Firebase v8 (works without modules) -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
   <script>
     const firebaseConfig = {
       apiKey: "AIzaSyDe62-Q_WF8oMomsKfonNd3u5jTUhrkaFc",
@@ -103,7 +100,7 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    let lastVisible = null; // for pagination
+    let lastVisible = null;
 
     // Show entry form
     function showEntryForm() {
@@ -111,7 +108,7 @@
       if (pw === "Helloandgoodbye36!") {
         document.getElementById("entryForm").style.display = "block";
       } else {
-        alert("❌ Wrong password!");
+        alert("Wrong password!");
       }
     }
 
@@ -120,7 +117,7 @@
       document.getElementById("historySection").scrollIntoView({ behavior: "smooth" });
     }
 
-    // Save entry with time
+    // Save entry
     async function saveEntry() {
       const text = document.getElementById("entryText").value.trim();
       if (!text) return;
@@ -134,10 +131,10 @@
       });
 
       document.getElementById("entryText").value = "";
-      alert("✅ Entry saved!");
+      alert("Entry saved!");
     }
 
-    // Format date to local timezone
+    // Format date in viewer's local timezone
     function formatDate(ts) {
       const d = new Date(ts);
       return d.toLocaleString(undefined, { dateStyle: "full", timeStyle: "short" });
@@ -186,7 +183,6 @@
       document.getElementById("loadMoreBtn").style.display = snapshot.size === 5 ? "block" : "none";
     }
 
-    // Manual load more
     function loadMoreEntries() {
       loadEntries();
     }
@@ -196,3 +192,4 @@
   </script>
 </body>
 </html>
+
