@@ -1,4 +1,4 @@
-<!DOC<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -92,7 +92,6 @@
     <h2>Latest Entry</h2>
   </div>
 
-
   <!-- History Section -->
   <div id="historySection">
     <h2>Journal History</h2>
@@ -128,10 +127,17 @@
       loginBox.style.display = loginBox.style.display === "none" ? "block" : "none";
     }
 
-    // Toggle History
+    // Toggle History (auto-load first batch)
+    let historyLoaded = false;
     function toggleHistory() {
       const history = document.getElementById("historySection");
-      history.style.display = history.style.display === "none" ? "block" : "none";
+      const isHidden = history.style.display === "none";
+      history.style.display = isHidden ? "block" : "none";
+
+      if (isHidden && !historyLoaded) {
+        loadMore();
+        historyLoaded = true;
+      }
     }
 
     // Auth state listener
@@ -197,10 +203,8 @@
     db.ref("entries").orderByKey().limitToLast(1).on("child_added", snapshot => {
       const data = snapshot.val();
       const latestContainer = document.getElementById("latestEntry");
-      // latestContainer.innerHTML = "<h2>Latest Entry</h2>"; // REMOVE this line
       displayEntry(snapshot.key, data, latestContainer);
     });
-
 
     // Display entry
     function displayEntry(key, data, container) {
@@ -221,8 +225,17 @@
         ${deleteBtn}
       `;
 
-      const heading = container.querySelector('h2');
-  heading.insertAdjacentElement('afterend', div);
+      if (container.id === "latestEntry") {
+        // keep heading on top
+        const heading = container.querySelector("h2");
+        if (heading) {
+          heading.insertAdjacentElement("afterend", div);
+        } else {
+          container.prepend(div);
+        }
+      } else {
+        container.appendChild(div); // history
+      }
     }
 
     // Delete entry
